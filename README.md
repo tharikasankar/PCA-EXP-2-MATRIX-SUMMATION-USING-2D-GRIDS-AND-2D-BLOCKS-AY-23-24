@@ -1,10 +1,10 @@
 # PCA-EXP-2-Matrix-Summation-using-2D-Grids-and-2D-Blocks-AY-23-24
 
-<h3>AIM:</h3>
-<h3>ENTER YOUR NAME</h3>
-<h3>ENTER YOUR REGISTER NO</h3>
-<h3>EX. NO</h3>
-<h3>DATE</h3>
+
+<h3>NAME : Tharika S</h3>
+<h3>REGISTER NO : 212222230159</h3>
+<h3>EX.NO : 02</h3>
+<h3>DATE : 12/03/24</h3>
 <h1> <align=center> MATRIX SUMMATION WITH A 2D GRID AND 2D BLOCKS </h3>
 i.  Use the file sumMatrixOnGPU-2D-grid-2D-block.cu
 ii. Matrix summation with a 2D grid and 2D blocks. Adapt it to integer matrix addition. Find the best execution configuration. </h3>
@@ -279,7 +279,8 @@ int main(int argc, char **argv)
 ```
 
 ## OUTPUT:
-SHOW YOUR OUTPUT HERE
+![image](https://github.com/tharikasankar/PCA-EXP-2-MATRIX-SUMMATION-USING-2D-GRIDS-AND-2D-BLOCKS-AY-23-24/assets/119475507/5fa66928-7d6e-4266-b7e8-3e697bafe25f)
+
 
 ## RESULT:
 The host took _________ seconds to complete it’s computation, while the GPU outperforms the host and completes the computation in ________ seconds. Therefore, float variables in the GPU will result in the best possible result. Thus, matrix summation using 2D grids and 2D blocks has been performed successfully.
