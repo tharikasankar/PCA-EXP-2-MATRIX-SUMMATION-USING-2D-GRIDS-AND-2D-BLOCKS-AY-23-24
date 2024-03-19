@@ -36,7 +36,9 @@ Google Colab with NVCC Compiler
 
 ## PROGRAM:
 ```
-%%cuda
+%%cuda 
+#include <cuda_runtime.h>
+#include <stdio.h>
 #include <sys/time.h>
 
 #ifndef _COMMON_H
@@ -114,38 +116,39 @@ inline double seconds()
 #endif // _COMMON_H
 
 
-#include <cuda_runtime.h>
-#include <stdio.h>
 
 /*
- * This example implements matrix element-wise addition on the host and GPU.
- * sumMatrixOnHost iterates over the rows and columns of each matrix, adding
- * elements from A and B together and storing the results in C. The current
- * offset in each matrix is stored using pointer arithmetic. sumMatrixOnGPU2D
- * implements the same logic, but using CUDA threads to process each matrix.
+ * This example demonstrates a simple vector sum on the GPU and on the host.
+ * sumArraysOnGPU splits the work of the vector sum across CUDA threads on the
+ * GPU. A 2D thread block and 2D grid are used. sumArraysOnHost sequentially
+ * iterates through vector elements on the host.
  */
 
-void initialData(float *ip, const int size)
+void initialData(int *ip, const int size)
 {
     int i;
 
     for(i = 0; i < size; i++)
     {
-        ip[i] = (float)( rand() & 0xFF ) / 10.0f;
+        ip[i] = (int)(rand() & 0xFF) / 10.0f;
     }
+
+    return;
 }
 
-void sumMatrixOnHost(float *A, float *B, float *C, const int nx, const int ny)
+void sumMatrixOnHost(int *A, int *B, int *C, const int nx,
+                     const int ny)
 {
-    float *ia = A;
-    float *ib = B;
-    float *ic = C;
+    int *ia = A;
+    int *ib = B;
+    int *ic = C;
 
     for (int iy = 0; iy < ny; iy++)
     {
         for (int ix = 0; ix < nx; ix++)
         {
             ic[ix] = ia[ix] + ib[ix];
+
         }
 
         ia += nx;
@@ -156,23 +159,30 @@ void sumMatrixOnHost(float *A, float *B, float *C, const int nx, const int ny)
     return;
 }
 
-void checkResult(float *hostRef, float *gpuRef, const int N)
+
+void checkResult(int *hostRef, int *gpuRef, const int N)
 {
     double epsilon = 1.0E-8;
+    bool match = 1;
 
     for (int i = 0; i < N; i++)
     {
         if (abs(hostRef[i] - gpuRef[i]) > epsilon)
         {
-            printf("host %f gpu %f ", hostRef[i], gpuRef[i]);
-            printf("Arrays do not match.\n\n");
+            match = 0;
+            printf("host %d gpu %d\n", hostRef[i], gpuRef[i]);
             break;
         }
     }
+
+    if (match)
+        printf("Arrays match.\n\n");
+    else
+        printf("Arrays do not match.\n\n");
 }
 
 // grid 2D block 2D
-__global__ void sumMatrixOnGPU2D(float *A, float *B, float *C, int NX, int NY)
+__global__ void sumMatrixOnGPU2D(int *A, int *B, int *C, int NX, int NY)
 {
     unsigned int ix = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int iy = blockIdx.y * blockDim.y + threadIdx.y;
@@ -186,10 +196,13 @@ __global__ void sumMatrixOnGPU2D(float *A, float *B, float *C, int NX, int NY)
 
 int main(int argc, char **argv)
 {
+    printf("%s Starting...\n", argv[0]);
+
     // set up device
     int dev = 0;
     cudaDeviceProp deviceProp;
     CHECK(cudaGetDeviceProperties(&deviceProp, dev));
+    printf("Using Device %d: %s\n", dev, deviceProp.name);
     CHECK(cudaSetDevice(dev));
 
     // set up data size of matrix
@@ -198,30 +211,33 @@ int main(int argc, char **argv)
 
     int nxy = nx * ny;
     int nBytes = nxy * sizeof(float);
+    printf("Matrix size: nx %d ny %d\n", nx, ny);
 
     // malloc host memory
-    float *h_A, *h_B, *hostRef, *gpuRef;
-    h_A = (float *)malloc(nBytes);
-    h_B = (float *)malloc(nBytes);
-    hostRef = (float *)malloc(nBytes);
-    gpuRef = (float *)malloc(nBytes);
+    int *h_A, *h_B, *hostRef, *gpuRef;
+    h_A = (int *)malloc(nBytes);
+    h_B = (int *)malloc(nBytes);
+    hostRef = (int *)malloc(nBytes);
+    gpuRef = (int *)malloc(nBytes);
 
     // initialize data at host side
-    size_t iStart = seconds();
+    double iStart = seconds();
     initialData(h_A, nxy);
     initialData(h_B, nxy);
-    size_t iElaps = seconds() - iStart;
+    double iElaps = seconds() - iStart;
+    printf("Matrix initialization elapsed %f sec\n", iElaps);
 
     memset(hostRef, 0, nBytes);
     memset(gpuRef, 0, nBytes);
 
     // add matrix at host side for result checks
     iStart = seconds();
-    sumMatrixOnHost (h_A, h_B, hostRef, nx, ny);
+    sumMatrixOnHost(h_A, h_B, hostRef, nx, ny);
     iElaps = seconds() - iStart;
+    printf("sumMatrixOnHost elapsed %f sec\n", iElaps);
 
     // malloc device global memory
-    float *d_MatA, *d_MatB, *d_MatC;
+    int *d_MatA, *d_MatB, *d_MatC;
     CHECK(cudaMalloc((void **)&d_MatA, nBytes));
     CHECK(cudaMalloc((void **)&d_MatB, nBytes));
     CHECK(cudaMalloc((void **)&d_MatC, nBytes));
@@ -233,25 +249,17 @@ int main(int argc, char **argv)
     // invoke kernel at host side
     int dimx = 32;
     int dimy = 32;
-
-    if(argc > 2)
-    {
-        dimx = atoi(argv[1]);
-        dimy = atoi(argv[2]);
-    }
-
     dim3 block(dimx, dimy);
     dim3 grid((nx + block.x - 1) / block.x, (ny + block.y - 1) / block.y);
 
-    // execute the kernel
-    CHECK(cudaDeviceSynchronize());
     iStart = seconds();
     sumMatrixOnGPU2D<<<grid, block>>>(d_MatA, d_MatB, d_MatC, nx, ny);
     CHECK(cudaDeviceSynchronize());
     iElaps = seconds() - iStart;
-    printf("sumMatrixOnGPU2D <<<(%d,%d), (%d,%d)>>> elapsed %d ms\n", grid.x,
+    printf("sumMatrixOnGPU2D <<<(%d,%d), (%d,%d)>>> elapsed %f sec\n", grid.x,
            grid.y,
            block.x, block.y, iElaps);
+    // check kernel error
     CHECK(cudaGetLastError());
 
     // copy kernel result back to host side
@@ -274,12 +282,17 @@ int main(int argc, char **argv)
     // reset device
     CHECK(cudaDeviceReset());
 
-    return EXIT_SUCCESS;
+    return (0);
 }
+
 ```
 
 ## OUTPUT:
+## on floating point data:
 ![image](https://github.com/tharikasankar/PCA-EXP-2-MATRIX-SUMMATION-USING-2D-GRIDS-AND-2D-BLOCKS-AY-23-24/assets/119475507/5fa66928-7d6e-4266-b7e8-3e697bafe25f)
+## on int data:
+
+![image](https://github.com/tharikasankar/PCA-EXP-2-MATRIX-SUMMATION-USING-2D-GRIDS-AND-2D-BLOCKS-AY-23-24/assets/119475507/453d7cc4-43d3-452f-b461-b9046504e7bf)
 
 
 ## RESULT:
